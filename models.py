@@ -7,19 +7,19 @@ from torch.nn.init import normal, constant
 class TSN(nn.Module):
     def __init__(self, num_class, num_segments, modality,
                  base_model='resnet101', new_length=None,
-                 consensus_type='avg', before_softmax=True,
+                 consensus_type='avg', before_sigmoid=True,
                  dropout=0.8,
                  crop_num=1, partial_bn=True):
         super(TSN, self).__init__()
         self.modality = modality
         self.num_segments = num_segments
         self.reshape = True
-        self.before_softmax = before_softmax
+        self.before_sigmoid = before_sigmoid
         self.dropout = dropout
         self.crop_num = crop_num
         self.consensus_type = consensus_type
-        if not before_softmax and consensus_type != 'avg':
-            raise ValueError("Only avg consensus can be used after Softmax")
+        if not before_sigmoid and consensus_type != 'avg':
+            raise ValueError("Only avg consensus can be used after Sigmoid")
 
         if new_length is None:
             self.new_length = 1 if modality == "RGB" else 5
@@ -51,8 +51,8 @@ TSN Configurations:
 
         self.consensus = ConsensusModule(consensus_type)
 
-        if not self.before_softmax:
-            self.softmax = nn.Softmax()
+        if not self.before_sigmoid:
+            self.sigmoid = nn.Sigmoid()
 
         self._enable_pbn = partial_bn
         if partial_bn:
@@ -82,6 +82,7 @@ TSN Configurations:
             self.base_model = getattr(torchvision.models, base_model)(True)
             self.base_model.last_layer_name = 'fc'
             self.input_size = 224
+            # How to choose these params?
             self.input_mean = [0.485, 0.456, 0.406]
             self.input_std = [0.229, 0.224, 0.225]
 
@@ -162,7 +163,7 @@ TSN Configurations:
                 normal_weight.append(ps[0])
                 if len(ps) == 2:
                     normal_bias.append(ps[1])
-                  
+
             elif isinstance(m, torch.nn.BatchNorm1d):
                 bn.extend(list(m.parameters()))
             elif isinstance(m, torch.nn.BatchNorm2d):
@@ -199,8 +200,8 @@ TSN Configurations:
         if self.dropout > 0:
             base_out = self.new_fc(base_out)
 
-        if not self.before_softmax:
-            base_out = self.softmax(base_out)
+        if not self.before_sigmoid:
+            base_out = self.sigmoid(base_out)
         if self.reshape:
             base_out = base_out.view((-1, self.num_segments) + base_out.size()[1:])
 
