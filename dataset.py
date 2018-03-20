@@ -19,8 +19,11 @@ class VideoRecord(object):
         return int(self._data[1])
 
     @property
-    def label(self):
-        return int(self._data[2:])
+    def label(self, num_category=101):
+        labels = np.zeros(num_category)
+        for index in self._data[2:]:
+            labels[index] = 1
+        return labels
 
 
 class TSNDataSet(data.Dataset):
