@@ -7,9 +7,9 @@ import numpy as np
 from numpy.random import randint
 
 class VideoRecord(object):
-    def __init__(self, row, num_category=101):
+    def __init__(self, row, num_class):
         self._data = row
-        self.num_category = num_category
+        self.num_class = num_class
 
     @property
     def path(self):
@@ -21,7 +21,7 @@ class VideoRecord(object):
 
     @property
     def label(self):
-        labels = np.zeros(self.num_category, dtype=np.int)
+        labels = np.zeros(self.num_class, dtype=np.int)
         for index in self._data[2:]:
             labels[int(index)] = 1
         return labels
@@ -31,7 +31,8 @@ class TSNDataSet(data.Dataset):
     def __init__(self, root_path, list_file,
                  num_segments=3, new_length=1, modality='RGB',
                  image_tmpl='img_{:05d}.jpg', transform=None,
-                 force_grayscale=False, random_shift=True, test_mode=False):
+                 force_grayscale=False, random_shift=True, test_mode=False,
+                 num_class=101):
 
         self.root_path = root_path
         self.list_file = list_file
@@ -42,6 +43,7 @@ class TSNDataSet(data.Dataset):
         self.transform = transform
         self.random_shift = random_shift
         self.test_mode = test_mode
+        self.num_class = num_class
 
         if self.modality == 'RGBDiff':
             self.new_length += 1# Diff needs one more image to calculate diff
@@ -58,7 +60,7 @@ class TSNDataSet(data.Dataset):
             return [x_img, y_img]
 
     def _parse_list(self):
-        self.video_list = [VideoRecord(x.strip().split(' '), num_category=45) for x in open(self.list_file)]
+        self.video_list = [VideoRecord(x.strip().split(' '), num_class=self.num_class) for x in open(self.list_file)]
 
     def _sample_indices(self, record):
         """

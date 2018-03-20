@@ -101,6 +101,8 @@ def main():
     # define loss function (criterion) and optimizer
     if args.loss_type == 'nll':
         criterion = torch.nn.CrossEntropyLoss().cuda()
+    elif arge.loss_type == 'bce':
+        criterion = torch.nn.BCEWithLogitsLoss(reduce=False).cuda()
     else:
         raise ValueError("Unknown loss type")
 
