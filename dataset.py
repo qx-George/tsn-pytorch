@@ -7,8 +7,9 @@ import numpy as np
 from numpy.random import randint
 
 class VideoRecord(object):
-    def __init__(self, row):
+    def __init__(self, row, num_category=101):
         self._data = row
+        self.num_category = num_category
 
     @property
     def path(self):
@@ -19,10 +20,10 @@ class VideoRecord(object):
         return int(self._data[1])
 
     @property
-    def label(self, num_category=101):
-        labels = np.zeros(num_category)
+    def label(self):
+        labels = np.zeros(self.num_category, dtype=np.int)
         for index in self._data[2:]:
-            labels[index] = 1
+            labels[int(index)] = 1
         return labels
 
 
@@ -57,7 +58,7 @@ class TSNDataSet(data.Dataset):
             return [x_img, y_img]
 
     def _parse_list(self):
-        self.video_list = [VideoRecord(x.strip().split(' ')) for x in open(self.list_file)]
+        self.video_list = [VideoRecord(x.strip().split(' '), num_category=45) for x in open(self.list_file)]
 
     def _sample_indices(self, record):
         """
