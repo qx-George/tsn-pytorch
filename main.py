@@ -169,7 +169,7 @@ def train(train_loader, model, criterion, optimizer, epoch):
         loss = criterion(output, target_var)
 
         # measure accuracy and record loss
-        prec1, prec5 = accuracy(output.data, target, topk=(1,5))
+        prec1, prec5 = accuracy(output.data, target, topk=5)
         losses.update(loss.data[0], input.size(0))
         top1.update(prec1[0], input.size(0))
         top5.update(prec5[0], input.size(0))
@@ -196,8 +196,8 @@ def train(train_loader, model, criterion, optimizer, epoch):
                   'Time {batch_time.val:.3f} ({batch_time.avg:.3f})\t'
                   'Data {data_time.val:.3f} ({data_time.avg:.3f})\t'
                   'Loss {loss.val:.4f} ({loss.avg:.4f})\t'
-                  'Prec@1 {top1.val:.3f} ({top1.avg:.3f})\t'
-                  'Prec@5 {top5.val:.3f} ({top5.avg:.3f})'.format(
+                  'Prec {top1.val:.3f} ({top1.avg:.3f})\t'
+                  'Recall {top5.val:.3f} ({top5.avg:.3f})'.format(
                    epoch, i, len(train_loader), batch_time=batch_time,
                    data_time=data_time, loss=losses, top1=top1, top5=top5, lr=optimizer.param_groups[-1]['lr'])))
 
@@ -222,7 +222,7 @@ def validate(val_loader, model, criterion, iter, logger=None):
         loss = criterion(output, target_var)
 
         # measure accuracy and record loss
-        prec1, prec5 = accuracy(output.data, target, topk=(1,5))
+        prec1, prec5 = accuracy(output.data, target, topk=5)
 
         losses.update(loss.data[0], input.size(0))
         top1.update(prec1[0], input.size(0))
@@ -283,20 +283,20 @@ def adjust_learning_rate(optimizer, epoch, lr_steps):
         param_group['weight_decay'] = decay * param_group['decay_mult']
 
 
-def accuracy(output, target, topk=(1,)):
+def accuracy(output, target, topk=5, num_class=101):
     """Computes the precision@k for the specified values of k"""
-    maxk = max(topk)
     batch_size = target.size(0)
 
-    _, pred = output.topk(maxk, 1, True, True)
-    pred = pred.t()
-    correct = pred.eq(target.view(1, -1).expand_as(pred))
+    _, index = output.topk(topk, 1, True, True)
+    #index = index.t() # ???change shape???
+    threshold = output[range(output.shape[0]), index[:, -1]]
+    pred = output.ge(threshold.view(batch_size, 1).expand_as(output))
 
-    res = []
-    for k in topk:
-        correct_k = correct[:k].view(-1).float().sum(0)
-        res.append(correct_k.mul_(100.0 / batch_size))
-    return res
+    correct = pred * target
+
+    prec = correct.view(-1).sum(0).mul_(100.0 / pred.sum())
+    recall = correct.view(-1).sum(0).mul_(100.0 / target.sum())
+    return prec, recall
 
 
 if __name__ == '__main__':

@@ -15,7 +15,7 @@ parser.add_argument('--k', type=int, default=3)
 parser.add_argument('--dropout', '--do', default=0.5, type=float,
                     metavar='DO', help='dropout ratio (default: 0.5)')
 parser.add_argument('--loss_type', type=str, default="nll",
-                    choices=['nll'])
+                    choices=['nll', 'bce'])
 
 # ========================= Learning Configs ==========================
 parser.add_argument('--epochs', default=45, type=int, metavar='N',
