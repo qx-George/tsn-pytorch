@@ -14,11 +14,12 @@ from models import TSN
 from transforms import *
 from opts import parser
 
-best_prec1 = 0
+best_prec = 0
+best_recall = 0
 
 
 def main():
-    global args, best_prec1
+    global args, best_prec, best_recall
     args = parser.parse_args()
 
     if args.dataset == 'ucf101':
@@ -27,8 +28,10 @@ def main():
         num_class = 51
     elif args.dataset == 'kinetics':
         num_class = 400
+    elif args.dataset == 'weishi':
+        num_class == 45
     else:
-        raise ValueError('Unknown dataset '+args.dataset)
+        raise ValueError('Unknown dataset '+ args.dataset)
 
     model = TSN(num_class, args.num_segments, args.modality,
                 base_model=args.arch,
@@ -48,7 +51,7 @@ def main():
             print(("=> loading checkpoint '{}'".format(args.resume)))
             checkpoint = torch.load(args.resume)
             args.start_epoch = checkpoint['epoch']
-            best_prec1 = checkpoint['best_prec1']
+            best_prec = checkpoint['best_prec']
             model.load_state_dict(checkpoint['state_dict'])
             print(("=> loaded checkpoint '{}' (epoch {})"
                   .format(args.evaluate, checkpoint['epoch'])))
@@ -102,7 +105,7 @@ def main():
     if args.loss_type == 'nll':
         criterion = torch.nn.CrossEntropyLoss().cuda()
     elif arge.loss_type == 'bce':
-        criterion = torch.nn.BCEWithLogitsLoss(reduce=False).cuda()
+        criterion = torch.nn.BCEWithLogitsLoss().cuda()
     else:
         raise ValueError("Unknown loss type")
 
@@ -127,25 +130,27 @@ def main():
 
         # evaluate on validation set
         if (epoch + 1) % args.eval_freq == 0 or epoch == args.epochs - 1:
-            prec1 = validate(val_loader, model, criterion, (epoch + 1) * len(train_loader))
+            prec = validate(val_loader, model, criterion, (epoch + 1) * len(train_loader))
 
-            # remember best prec@1 and save checkpoint
-            is_best = prec1 > best_prec1
-            best_prec1 = max(prec1, best_prec1)
+            # remember best precision, best recall and save checkpoint
+            is_best_prec = prec > best_prec
+            is_best_recall = recall > best_recall
+            best_prec = max(prec, best_prec)
             save_checkpoint({
                 'epoch': epoch + 1,
                 'arch': args.arch,
                 'state_dict': model.state_dict(),
-                'best_prec1': best_prec1,
-            }, is_best)
+                'best_prec': best_prec,
+                'best_recall': best_recall,
+            }, is_best_prec, is_best_recall)
 
 
 def train(train_loader, model, criterion, optimizer, epoch):
     batch_time = AverageMeter()
     data_time = AverageMeter()
     losses = AverageMeter()
-    top1 = AverageMeter()
-    top5 = AverageMeter()
+    top_prec = AverageMeter()
+    top_recall = AverageMeter()
 
     if args.no_partialbn:
         model.module.partialBN(False)
@@ -169,10 +174,10 @@ def train(train_loader, model, criterion, optimizer, epoch):
         loss = criterion(output, target_var)
 
         # measure accuracy and record loss
-        prec1, prec5 = accuracy(output.data, target, topk=5)
+        prec, recall = accuracy(output.data, target, topk=5)
         losses.update(loss.data[0], input.size(0))
-        top1.update(prec1[0], input.size(0))
-        top5.update(prec5[0], input.size(0))
+        top_prec.update(prec[0], input.size(0))
+        top_recall.update(recall[0], input.size(0))
 
 
         # compute gradient and do SGD step
@@ -196,17 +201,17 @@ def train(train_loader, model, criterion, optimizer, epoch):
                   'Time {batch_time.val:.3f} ({batch_time.avg:.3f})\t'
                   'Data {data_time.val:.3f} ({data_time.avg:.3f})\t'
                   'Loss {loss.val:.4f} ({loss.avg:.4f})\t'
-                  'Prec {top1.val:.3f} ({top1.avg:.3f})\t'
-                  'Recall {top5.val:.3f} ({top5.avg:.3f})'.format(
+                  'Prec {top_prec.val:.3f} ({top_prec.avg:.3f})\t'
+                  'Recall {top_recall.val:.3f} ({top_recall.avg:.3f})'.format(
                    epoch, i, len(train_loader), batch_time=batch_time,
-                   data_time=data_time, loss=losses, top1=top1, top5=top5, lr=optimizer.param_groups[-1]['lr'])))
+                   data_time=data_time, loss=losses, top_prec=top_prec, top_recall=top_recall, lr=optimizer.param_groups[-1]['lr'])))
 
 
 def validate(val_loader, model, criterion, iter, logger=None):
     batch_time = AverageMeter()
     losses = AverageMeter()
-    top1 = AverageMeter()
-    top5 = AverageMeter()
+    top_prec = AverageMeter()
+    top_recall = AverageMeter()
 
     # switch to evaluate mode
     model.eval()
@@ -222,11 +227,11 @@ def validate(val_loader, model, criterion, iter, logger=None):
         loss = criterion(output, target_var)
 
         # measure accuracy and record loss
-        prec1, prec5 = accuracy(output.data, target, topk=5)
+        prec, recall = accuracy(output.data, target, topk=5)
 
         losses.update(loss.data[0], input.size(0))
-        top1.update(prec1[0], input.size(0))
-        top5.update(prec5[0], input.size(0))
+        top_prec.update(prec[0], input.size(0))
+        top_recall.update(recall[0], input.size(0))
 
         # measure elapsed time
         batch_time.update(time.time() - end)
@@ -236,15 +241,15 @@ def validate(val_loader, model, criterion, iter, logger=None):
             print(('Test: [{0}/{1}]\t'
                   'Time {batch_time.val:.3f} ({batch_time.avg:.3f})\t'
                   'Loss {loss.val:.4f} ({loss.avg:.4f})\t'
-                  'Prec@1 {top1.val:.3f} ({top1.avg:.3f})\t'
-                  'Prec@5 {top5.val:.3f} ({top5.avg:.3f})'.format(
+                  'Prec {top_prec.val:.3f} ({top_prec.avg:.3f})\t'
+                  'Recall {top_recall.val:.3f} ({top_recall.avg:.3f})'.format(
                    i, len(val_loader), batch_time=batch_time, loss=losses,
-                   top1=top1, top5=top5)))
+                   top_prec=top_prec, top_recall=top_recall)))
 
-    print(('Testing Results: Prec@1 {top1.avg:.3f} Prec@5 {top5.avg:.3f} Loss {loss.avg:.5f}'
-          .format(top1=top1, top5=top5, loss=losses)))
+    print(('Testing Results: Prec {top_prec.avg:.3f} Recall {top_recall.avg:.3f} Loss {loss.avg:.5f}'
+          .format(top_prec=top_prec, top_recall=top_recall, loss=losses)))
 
-    return top1.avg
+    return top_prec.avg
 
 
 def save_checkpoint(state, is_best, filename='checkpoint.pth.tar'):
