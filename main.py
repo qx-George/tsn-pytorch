@@ -288,7 +288,11 @@ def adjust_learning_rate(optimizer, epoch, lr_steps):
         param_group['weight_decay'] = decay * param_group['decay_mult']
 
 
-def accuracy(output, target, topk=5, num_class=101):
+def accuracy(output, target, threshold=0.5, topk=5):
+    pred = output > threshold 
+    correct = pred * target
+    prec = correct.view(-1).sum(0).mul_(100 / pred.sum())
+
     """Computes the precision@k for the specified values of k"""
     batch_size = target.size(0)
 
@@ -299,7 +303,6 @@ def accuracy(output, target, topk=5, num_class=101):
 
     correct = pred * target
 
-    prec = correct.view(-1).sum(0).mul_(100.0 / pred.sum())
     recall = correct.view(-1).sum(0).mul_(100.0 / target.sum())
     return prec, recall
 
